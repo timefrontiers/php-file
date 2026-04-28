@@ -252,4 +252,17 @@ class FileToken
   public static function _instantiateFromRow(array $row): static
   {
     $conn = static::$_connection
-    
+      ?? throw new \LogicException(
+        'No DB connection for FileToken. Ensure new File($conn) was called first.'
+      );
+
+    $instance = new static($conn);
+    foreach ($row as $key => $value) {
+      if (!is_int($key)) {
+        $instance->$key = $value;
+      }
+    }
+
+    return $instance;
+  }
+}

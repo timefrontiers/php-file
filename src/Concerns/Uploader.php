@@ -244,4 +244,6 @@ trait Uploader
       $code = $prefix . Random::numeric(12); // 3 + 12 = 15 chars
     } while (static::query()->where('code', $code)->exists());
 
-   
+    return $code;
+  }
+}

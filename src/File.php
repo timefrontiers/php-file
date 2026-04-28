@@ -406,4 +406,10 @@ class File
     $instance = new static($conn);
     foreach ($row as $key => $value) {
       if (!is_int($key)) {
-        $
+        $instance->$key = $value;
+      }
+    }
+
+    return $instance;
+  }
+}
