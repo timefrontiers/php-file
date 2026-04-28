@@ -133,11 +133,6 @@ class File
   protected ?string $_updated     = null;
   protected ?string $_created     = null;
 
-  /**
-   * Stored to allow _instantiateFromRow to work without a global.
-   * Set on every __construct call.
-   */
-  protected static ?SQLDatabase $_static_conn = null;
 
   // -------------------------------------------------------------------------
   // Bootstrap (static — call once in app boot)
@@ -159,8 +154,7 @@ class File
   public function __construct(SQLDatabase $conn, ?string $driverOverride = null)
   {
     FileConfig::requireConfigured();
-    static::$_db_name    = FileConfig::get('db_name', 'file');
-    static::$_static_conn = $conn;
+    static::$_db_name = FileConfig::get('db_name', 'file');
 
     if ($driverOverride !== null) {
       $this->storage_driver = $driverOverride;
@@ -398,10 +392,7 @@ class File
 
   public static function _instantiateFromRow(array $row): static
   {
-    $conn = static::$_static_conn
-      ?? throw new \LogicException(
-        'No static DB connection on File. Ensure new File($conn) was called first.'
-      );
+    $conn = static::_getStaticConnection();
 
     $instance = new static($conn);
     foreach ($row as $key => $value) {
