@@ -9,6 +9,10 @@ use TimeFrontiers\File\Exceptions\DriverException;
  * Microsoft OneDrive driver — STUB.
  *
  * Reserved for a future implementation.
+ * Configure drivers['onedrive'] only after this class is fully implemented.
+ *
+ * When implemented, configure via drivers['onedrive']:
+ *   'storage_url' => ''   // optional CDN override
  */
 class OneDriveDriver implements StorageDriverInterface
 {

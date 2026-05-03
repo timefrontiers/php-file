@@ -8,6 +8,7 @@ use TimeFrontiers\File\FileConfig;
 use TimeFrontiers\File\Drivers\StorageDriverInterface;
 use TimeFrontiers\File\Drivers\LocalDriver;
 use TimeFrontiers\File\Drivers\AwsS3Driver;
+use TimeFrontiers\File\Drivers\MinioDriver;
 use TimeFrontiers\File\Drivers\GoogleGcsDriver;
 use TimeFrontiers\File\Drivers\OneDriveDriver;
 use TimeFrontiers\File\Drivers\DropboxDriver;
@@ -193,8 +194,8 @@ trait Uploader
     }
 
     $this->_name          = $uniqueName;
-    $this->storage_driver = FileConfig::driver('name', 'local');
-    $this->storage_bucket = FileConfig::driver('bucket');
+    // storage_driver is already set by the constructor — do not overwrite here.
+    $this->storage_bucket = FileConfig::driverConfig($this->storage_driver, 'bucket');
     $this->code           = $this->_generateFileCode();
 
     if (!$this->_create()) {
@@ -222,10 +223,11 @@ trait Uploader
    */
   protected function _resolveDriver(?string $override = null): StorageDriverInterface
   {
-    $name = $override ?? $this->storage_driver ?? FileConfig::driver('name', 'local');
+    $name = $override ?? $this->storage_driver;
 
     return match ($name) {
       's3'       => new AwsS3Driver(),
+      'minio'    => new MinioDriver(),
       'gcs'      => new GoogleGcsDriver(),
       'onedrive' => new OneDriveDriver(),
       'dropbox'  => new DropboxDriver(),

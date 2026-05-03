@@ -17,7 +17,7 @@ Multi-driver file storage for PHP 8.3+. Handles upload, retrieval, and streaming
 - `gumlet/php-image-resize` _(bundled — used for max-dimension enforcement on upload)_
 
 **Optional:**
-- `aws/aws-sdk-php ^3.0` — required when using the S3 driver
+- `aws/aws-sdk-php ^3.0` — required when using the S3 or MinIO driver
 
 ---
 
@@ -27,7 +27,7 @@ Multi-driver file storage for PHP 8.3+. Handles upload, retrieval, and streaming
 composer require timefrontiers/php-file
 ```
 
-For S3 support:
+For S3 or MinIO support:
 
 ```bash
 composer require aws/aws-sdk-php
@@ -55,34 +55,79 @@ folder_files   — folder ↔ file pivot
 
 Call `File::configure()` once in your application bootstrap, before any `File` instance is created.
 
+`base[]` holds global settings. `drivers[]` is a keyed map where each key is a driver name and the value is that driver's config. Only the drivers you declare are available at runtime.
+
 ```php
 use TimeFrontiers\File\File;
 
 File::configure(
     base: [
-        'db_name'       => 'file',                     // database name
-        'upload_path'   => '/var/www/storage',         // absolute root for local storage
-        'storage_url'   => 'https://cdn.example.com',  // base URL for direct public file access
-        'service_url'   => 'https://files.example.com',// base URL for your download endpoint
-        'token_secret'  => 'your-hmac-secret',         // used to sign download tokens
-        'max_size'      => 1024 * 1024 * 25,           // 25 MB upload limit
-        'min_size'      => 0,                          // 0 = no minimum
-        'max_width_px'  => 2000,                       // images wider than this are resized down
-        'max_height_px' => 2000,
-        'min_width_px'  => null,                       // null = no minimum dimension check
-        'min_height_px' => null,
+        'default_driver' => 'local',                     // which driver to use when none is specified
+        'db_name'        => 'file',                      // database name
+        'service_url'    => 'https://files.example.com', // base URL for your token download endpoint
+        'token_secret'   => 'your-hmac-secret',          // used to sign download tokens
+        'max_size'       => 1024 * 1024 * 25,            // 25 MB upload limit
+        'min_size'       => 0,                           // 0 = no minimum
+        'max_width_px'   => 2000,                        // images wider than this are resized down
+        'max_height_px'  => 2000,
+        'min_width_px'   => null,                        // null = no minimum dimension check
+        'min_height_px'  => null,
     ],
-    driver: [
-        'name'    => 'local',       // 'local' | 's3' | 'gcs' | 'onedrive' | 'dropbox'
-        // S3 options (only read when name = 's3'):
-        'bucket'  => '',
-        'region'  => 'us-east-1',
-        'key'     => '',
-        'secret'  => '',
-        'endpoint'=> null,          // set for S3-compatible stores (MinIO etc.)
+    drivers: [
+        'local' => [
+            'upload_path' => '/var/www/storage',          // absolute root on disk
+            'storage_url' => 'https://cdn.example.com',   // base URL for direct public file access
+        ],
+        's3' => [
+            'bucket'      => 'my-bucket',
+            'region'      => 'us-east-1',
+            'key'         => 'ACCESS_KEY_ID',
+            'secret'      => 'SECRET_ACCESS_KEY',
+            'endpoint'    => null,                        // set for S3-compatible stores (not MinIO — use 'minio' driver)
+            'storage_url' => '',                          // optional CDN override; if empty → native S3 URL
+        ],
+        'minio' => [
+            'endpoint'    => 'http://localhost:9000',     // MinIO server URL (required)
+            'bucket'      => 'my-bucket',                 // bucket name (required)
+            'region'      => 'us-east-1',                 // ignored by MinIO but required by the SDK
+            'key'         => 'minioadmin',
+            'secret'      => 'minioadmin',
+            'storage_url' => '',                          // optional CDN/public URL override
+        ],
     ]
 );
 ```
+
+> **Validation at configure time:** `default_driver` must match a key in `drivers[]`. An unknown driver, a missing `default_driver`, or a non-array driver entry all throw a `ConfigurationException` immediately — fail-fast, no silent misconfiguration.
+
+### Local driver options
+
+| Key | Required | Description |
+|---|---|---|
+| `upload_path` | ✅ | Absolute filesystem root where files are stored |
+| `storage_url` | ✅ | Base URL for direct public access to files |
+
+### S3 driver options
+
+| Key | Required | Description |
+|---|---|---|
+| `bucket` | ✅ | S3 bucket name |
+| `region` | — | AWS region (default `us-east-1`) |
+| `key` | ✅ | AWS access key ID |
+| `secret` | ✅ | AWS secret access key |
+| `endpoint` | — | Custom endpoint for S3-compatible stores |
+| `storage_url` | — | CDN override; if empty, native S3 URL is used |
+
+### MinIO driver options
+
+| Key | Required | Description |
+|---|---|---|
+| `endpoint` | ✅ | MinIO server URL (e.g. `http://localhost:9000`) |
+| `bucket` | ✅ | Bucket name |
+| `region` | — | Ignored by MinIO but required by the SDK (default `us-east-1`) |
+| `key` | ✅ | MinIO access key |
+| `secret` | ✅ | MinIO secret key |
+| `storage_url` | — | CDN/public URL override; if empty, URL is built as `{endpoint}/{bucket}/{path}` |
 
 ---
 
@@ -93,12 +138,18 @@ File::configure(
 ```php
 use TimeFrontiers\File\File;
 
+// Uses base.default_driver
 $file = new File($conn);
-$file->setPath('/User-Files/' . $userCode)   // relative path inside upload_path
+
+// Or select a driver explicitly for this instance
+$file = new File($conn, 's3');
+$file = new File($conn, 'minio');
+
+$file->setPath('/User-Files/' . $userCode)   // relative path inside the driver's storage root
      ->privacy('public');                    // 'public' | 'private'
 
-$file->owner    = $userCode;
-$file->caption  = 'Profile photo';
+$file->owner   = $userCode;
+$file->caption = 'Profile photo';
 
 $ok = $file->upload($_FILES['avatar'], owner: $userCode, creator: $userCode);
 
@@ -106,8 +157,8 @@ if (!$ok) {
     // $file->getErrors() — HasErrors compatible
 }
 
-echo $file->id;        // BIGINT surrogate key
-echo $file->code;      // '583...' 15-char human identifier
+echo $file->id;           // BIGINT surrogate key
+echo $file->code;         // '583...' 15-char human identifier
 echo $file->sizeAsText(); // '1.2 MB'
 ```
 
@@ -258,17 +309,14 @@ $folder->destroy();
 
 | Driver | Status | Notes |
 |--------|--------|-------|
-| `local` | ✅ Full | Default. Files stored under `upload_path`. |
-| `s3` | ✅ Full | Requires `aws/aws-sdk-php`. Works with any S3-compatible endpoint. |
+| `local` | ✅ Full | Default. Files stored under `drivers.local.upload_path`. |
+| `s3` | ✅ Full | Requires `aws/aws-sdk-php`. Standard AWS S3 or S3-compatible endpoint. |
+| `minio` | ✅ Full | Requires `aws/aws-sdk-php`. Path-style endpoint enforced. `endpoint` is required. |
 | `gcs` | 🔲 Stub | Throws `DriverException` — implementation coming. |
 | `onedrive` | 🔲 Stub | Throws `DriverException` — implementation coming. |
 | `dropbox` | 🔲 Stub | Throws `DriverException` — implementation coming. |
 
-Override the driver for a specific instance:
-
-```php
-$file = new File($conn, driver: 's3');
-```
+The driver used to store a file is recorded in `file_meta.storage_driver`. When a file is loaded from the database, the correct driver is automatically resolved for streaming and deletion — regardless of the current `default_driver` setting.
 
 ---
 

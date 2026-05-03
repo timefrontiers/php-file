@@ -19,39 +19,51 @@ use TimeFrontiers\File\Concerns\Reader;
  *
  *   File::configure(
  *       base: [
- *           'db_name'       => 'file',
- *           'upload_path'   => '/var/www/storage',
- *           'storage_url'   => 'https://cdn.example.com',
- *           'service_url'   => 'https://files.example.com',
- *           'token_secret'  => 'your-hmac-key',
- *           'max_size'      => 1024 * 1024 * 25,   // 25 MB
- *           'min_size'      => 0,
- *           'max_width_px'  => 2000,
- *           'max_height_px' => 2000,
- *           'min_width_px'  => null,
- *           'min_height_px' => null,
+ *           'default_driver' => 'local',
+ *           'db_name'        => 'file',
+ *           'service_url'    => 'https://files.example.com',
+ *           'token_secret'   => 'your-hmac-key',
+ *           'max_size'       => 1024 * 1024 * 25,  // 25 MB
+ *           'min_size'       => 0,
+ *           'max_width_px'   => 2000,
+ *           'max_height_px'  => 2000,
+ *           'min_width_px'   => null,
+ *           'min_height_px'  => null,
  *       ],
- *       driver: [
- *           'name'    => 'local',  // 'local' | 's3' | 'gcs' | 'onedrive' | 'dropbox'
- *           // S3:
- *           'bucket'  => '',
- *           'region'  => 'us-east-1',
- *           'key'     => '',
- *           'secret'  => '',
- *           'endpoint'=> null,
+ *       drivers: [
+ *           'local' => [
+ *               'upload_path' => '/var/www/storage',
+ *               'storage_url' => 'https://cdn.example.com',
+ *           ],
+ *           's3' => [
+ *               'bucket'      => 'my-bucket',
+ *               'region'      => 'us-east-1',
+ *               'key'         => 'ACCESS_KEY_ID',
+ *               'secret'      => 'SECRET_ACCESS_KEY',
+ *               'endpoint'    => null,
+ *               'storage_url' => '',
+ *           ],
+ *           'minio' => [
+ *               'endpoint'    => 'http://localhost:9000',
+ *               'bucket'      => 'my-bucket',
+ *               'key'         => 'minioadmin',
+ *               'secret'      => 'minioadmin',
+ *               'storage_url' => '',
+ *           ],
  *       ]
  *   );
  *
  * ── Upload ───────────────────────────────────────────────────────────────────
  *
- *   $file = new File($conn);
+ *   $file = new File($conn);                   // uses base.default_driver
+ *   $file = new File($conn, 's3');             // explicit driver override
  *   $file->setPath('/User-Files/12345')
  *        ->privacy('private');
- *   $ok = $file->upload($_FILES['avatar'], userId: $userId);
+ *   $ok = $file->upload($_FILES['avatar'], owner: $ownerCode);
  *
  * ── Load ─────────────────────────────────────────────────────────────────────
  *
- *   $file = (new File($conn))->load(42);          // by BIGINT id
+ *   $file = (new File($conn))->load(42);            // by BIGINT id
  *   $file = (new File($conn))->load('583012345678901'); // by code
  *
  * ── Download token ───────────────────────────────────────────────────────────
@@ -139,28 +151,36 @@ class File
   // -------------------------------------------------------------------------
 
   /**
-   * @param array<string, mixed> $base
-   * @param array<string, mixed> $driver
+   * @param array<string, mixed>               $base
+   * @param array<string, array<string, mixed>> $drivers
    */
-  public static function configure(array $base, array $driver = []): void
+  public static function configure(array $base, array $drivers = []): void
   {
-    FileConfig::configure($base, $driver);
+    FileConfig::configure($base, $drivers);
   }
 
   // -------------------------------------------------------------------------
   // Constructor
   // -------------------------------------------------------------------------
 
-  public function __construct(SQLDatabase $conn, ?string $driverOverride = null)
+  public function __construct(SQLDatabase $conn, ?string $driver = null)
   {
     FileConfig::requireConfigured();
     static::$_db_name = FileConfig::get('db_name', 'file');
 
-    if ($driverOverride !== null) {
-      $this->storage_driver = $driverOverride;
-    } else {
-      $this->storage_driver = FileConfig::driver('name', 'local');
+    // Resolve driver: caller-supplied → base.default_driver → hard fallback 'local'
+    $resolved = $driver ?? FileConfig::get('default_driver', 'local');
+
+    // RULE 5 — requested driver must exist in the configured drivers map
+    if (!array_key_exists($resolved, FileConfig::drivers())) {
+      $available = implode(', ', array_keys(FileConfig::drivers()));
+      throw new \TimeFrontiers\File\Exceptions\ConfigurationException(
+        "Unknown storage driver \"{$resolved}\". "
+        . "Configured drivers: [{$available}]."
+      );
     }
+
+    $this->storage_driver = $resolved;
 
     $this->setConnection($conn);
     static::useConnection($conn);
@@ -255,7 +275,7 @@ class File
       $this->code = $this->_generateFileCode();
     }
     if (empty($this->storage_driver)) {
-      $this->storage_driver = FileConfig::driver('name', 'local');
+      $this->storage_driver = FileConfig::get('default_driver', 'local');
     }
 
     $result = $this->_create();

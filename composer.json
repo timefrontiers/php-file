@@ -1,7 +1,7 @@
 {
   "name": "timefrontiers/php-file",
   "description": "TimeFrontiers File — multi-driver file storage, expiring download tokens, and image size constraints",
-  "keywords": ["php", "file", "storage", "s3", "upload", "download", "timefrontiers"],
+  "keywords": ["php", "file", "storage", "s3", "minio", "upload", "download", "timefrontiers"],
   "homepage": "https://github.com/timefrontiers/php-file",
   "type": "library",
   "license": "MIT",
@@ -25,7 +25,7 @@
   },
   "require-dev": {},
   "suggest": {
-    "aws/aws-sdk-php": "Required when using the S3 storage driver (^3.0)",
+    "aws/aws-sdk-php": "Required when using the S3 or MinIO storage driver (^3.0)",
     "timefrontiers/php-image": "Advanced image manipulation — crop, watermark, rotate (coming soon)"
   },
   "autoload": {

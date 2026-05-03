@@ -11,13 +11,13 @@ use TimeFrontiers\File\Exceptions\DriverException;
  *
  * Requires:  composer require aws/aws-sdk-php
  *
- * Configure via driver[]:
- *   'name'     => 's3'
- *   'bucket'   => 'my-bucket'
- *   'region'   => 'us-east-1'
- *   'key'      => 'ACCESS_KEY_ID'
- *   'secret'   => 'SECRET_ACCESS_KEY'
- *   'endpoint' => null   // set for MinIO / custom S3-compatible endpoints
+ * Configure via drivers['s3']:
+ *   'bucket'      => 'my-bucket'
+ *   'region'      => 'us-east-1'
+ *   'key'         => 'ACCESS_KEY_ID'
+ *   'secret'      => 'SECRET_ACCESS_KEY'
+ *   'endpoint'    => null      // set for S3-compatible stores (MinIO etc.)
+ *   'storage_url' => ''        // optional CDN override; if empty → native S3 URL
  *
  * Token-based expiry is handled at the FileToken layer (driver-agnostic).
  * S3 native pre-signed URLs are intentionally not used here.
@@ -38,10 +38,10 @@ class AwsS3Driver implements StorageDriverInterface
       );
     }
 
-    $bucket = FileConfig::driver('bucket', '');
+    $bucket = FileConfig::driverConfig('s3', 'bucket', '');
     if (empty($bucket)) {
       throw new DriverException(
-        'S3 driver requires driver[\'bucket\'] to be set in File::configure().'
+        "S3 driver requires drivers['s3']['bucket'] to be set in File::configure()."
       );
     }
 
@@ -49,16 +49,16 @@ class AwsS3Driver implements StorageDriverInterface
 
     $config = [
       'version'     => 'latest',
-      'region'      => FileConfig::driver('region', 'us-east-1'),
+      'region'      => FileConfig::driverConfig('s3', 'region', 'us-east-1'),
       'credentials' => [
-        'key'    => FileConfig::driver('key', ''),
-        'secret' => FileConfig::driver('secret', ''),
+        'key'    => FileConfig::driverConfig('s3', 'key', ''),
+        'secret' => FileConfig::driverConfig('s3', 'secret', ''),
       ],
     ];
 
-    if ($endpoint = FileConfig::driver('endpoint')) {
-      $config['endpoint']                  = $endpoint;
-      $config['use_path_style_endpoint']   = true;
+    if ($endpoint = FileConfig::driverConfig('s3', 'endpoint')) {
+      $config['endpoint']                = $endpoint;
+      $config['use_path_style_endpoint'] = true;
     }
 
     $this->client = new \Aws\S3\S3Client($config);
@@ -110,9 +110,8 @@ class AwsS3Driver implements StorageDriverInterface
 
   public function url(string $storagePath): string
   {
-    // Returns the native S3 object URL.
-    // If you use CloudFront, override storage_url in base config instead.
-    $storageUrl = FileConfig::storageUrl();
+    // If a CDN or custom storage_url is configured for s3, use it.
+    $storageUrl = FileConfig::storageUrl('s3');
     if ($storageUrl) {
       return $storageUrl . '/' . ltrim($storagePath, '/');
     }

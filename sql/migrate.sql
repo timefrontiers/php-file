@@ -51,7 +51,7 @@ ALTER TABLE `lnk_files`.`file_meta` AUTO_INCREMENT = 1;
 
 -- 1f. Add storage columns (default local — all existing files are local)
 ALTER TABLE `lnk_files`.`file_meta`
-  ADD COLUMN `storage_driver` ENUM('local','s3','gcs','onedrive','dropbox')
+  ADD COLUMN `storage_driver` ENUM('local','s3','minio','gcs','onedrive','dropbox')
     NOT NULL DEFAULT 'local' AFTER `privacy`,
   ADD COLUMN `storage_bucket` VARCHAR(128) DEFAULT NULL AFTER `storage_driver`;
 

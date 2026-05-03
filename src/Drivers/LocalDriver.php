@@ -61,7 +61,7 @@ class LocalDriver implements StorageDriverInterface
 
   public function url(string $storagePath): string
   {
-    return FileConfig::storageUrl() . '/' . ltrim($storagePath, '/');
+    return FileConfig::storageUrl('local') . '/' . ltrim($storagePath, '/');
   }
 
   public function read(string $storagePath): mixed

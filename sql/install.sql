@@ -30,7 +30,7 @@ CREATE TABLE `file_meta` (
   `caption`         VARCHAR(255)      DEFAULT NULL,
   `owner`           VARCHAR(64)       NOT NULL                  COMMENT 'User code, system constant (e.g. SYSTEM, SYSTEM.HIDDEN), or any string identifier',
   `privacy`         ENUM('public','private') NOT NULL DEFAULT 'public',
-  `storage_driver`  ENUM('local','s3','gcs','onedrive','dropbox') NOT NULL DEFAULT 'local',
+  `storage_driver`  ENUM('local','s3','minio','gcs','onedrive','dropbox') NOT NULL DEFAULT 'local',
   `storage_bucket`  VARCHAR(128)      DEFAULT NULL              COMMENT 'Bucket / container name for cloud drivers',
   `_name`           VARCHAR(250)      NOT NULL                  COMMENT 'Filename as stored in the driver (unique)',
   `_path`           VARCHAR(255)      NOT NULL                  COMMENT 'Relative path inside upload root',

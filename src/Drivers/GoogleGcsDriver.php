@@ -9,7 +9,10 @@ use TimeFrontiers\File\Exceptions\DriverException;
  * Google Cloud Storage driver — STUB.
  *
  * This driver is reserved for a future implementation.
- * Configure driver['name'] = 'gcs' only after this class is fully implemented.
+ * Configure drivers['gcs'] only after this class is fully implemented.
+ *
+ * When implemented, configure via drivers['gcs']:
+ *   'storage_url' => ''   // optional CDN override
  */
 class GoogleGcsDriver implements StorageDriverInterface
 {
