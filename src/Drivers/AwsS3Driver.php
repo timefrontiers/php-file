@@ -79,7 +79,7 @@ class AwsS3Driver implements StorageDriverInterface
       ]);
       return true;
     } catch (\Throwable $e) {
-      return false;
+      throw new DriverException('S3 upload failed: ' . $e->getMessage(), 0, $e);
     }
   }
 

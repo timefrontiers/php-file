@@ -63,6 +63,7 @@ use TimeFrontiers\File\File;
 File::configure(
     base: [
         'default_driver' => 'local',                     // which driver to use when none is specified
+        'path_prefix'    => 'User-Files',                // logical storage namespace — package appends /{owner}
         'db_name'        => 'file',                      // database name
         'service_url'    => 'https://files.example.com', // base URL for your token download endpoint
         'token_secret'   => 'your-hmac-secret',          // used to sign download tokens
@@ -98,7 +99,27 @@ File::configure(
 );
 ```
 
-> **Validation at configure time:** `default_driver` must match a key in `drivers[]`. An unknown driver, a missing `default_driver`, or a non-array driver entry all throw a `ConfigurationException` immediately — fail-fast, no silent misconfiguration.
+> **Validation at configure time:** `default_driver` must match a key in `drivers[]`. An unknown driver, a missing `default_driver`, or a non-array driver entry all throw a `ConfigurationException` immediately.
+
+### `path_prefix` — logical storage namespace
+
+`base.path_prefix` is appended before `/{owner}` by the package automatically, producing a
+consistent storage path across **all** drivers:
+
+| Driver | Physical / key location |
+|---|---|
+| `local` | `{upload_path}/{path_prefix}/{owner}/{filename}` |
+| `s3` | Object key: `{path_prefix}/{owner}/{filename}` |
+| `minio` | Object key: `{path_prefix}/{owner}/{filename}` |
+
+Set it dynamically at configure-time based on the user's access level:
+```php
+$path_prefix = get_constant('FILE_ACCESS_SCOPE') === 'USER'
+    ? 'User-Files'
+    : $session->access_group()->value;  // e.g. 'ADMIN'
+
+File::configure(base: ['path_prefix' => $path_prefix, ...], drivers: [...]);
+```
 
 ### Local driver options
 
@@ -138,20 +159,22 @@ File::configure(
 ```php
 use TimeFrontiers\File\File;
 
-// Uses base.default_driver
+// Uses base.default_driver — _path is auto-built as /{path_prefix}/{owner}
 $file = new File($conn);
 
 // Or select a driver explicitly for this instance
 $file = new File($conn, 's3');
 $file = new File($conn, 'minio');
 
-$file->setPath('/User-Files/' . $userCode)   // relative path inside the driver's storage root
-     ->privacy('public');                    // 'public' | 'private'
-
+$file->privacy('public');    // 'public' | 'private'
 $file->owner   = $userCode;
 $file->caption = 'Profile photo';
 
+// _path is automatically /{path_prefix}/{userCode} — no setPath() needed
 $ok = $file->upload($_FILES['avatar'], owner: $userCode, creator: $userCode);
+
+// Override path explicitly when needed (e.g. system files, shared folders):
+// $file->setPath('/System/Shared');
 
 if (!$ok) {
     // $file->getErrors() — HasErrors compatible
@@ -183,7 +206,8 @@ $files = File::query()
 ### Direct URL (public files only)
 
 ```php
-echo $file->url();   // https://cdn.example.com/User-Files/123/abc.jpg
+// URL exposes only the unique filename — internal folder structure is never revealed
+echo $file->url();   // https://cdn.example.com/abc123def456789.jpg
 ```
 
 ### Download tokens

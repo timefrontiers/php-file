@@ -5,6 +5,7 @@ namespace TimeFrontiers\File\Concerns;
 
 use TimeFrontiers\Data\Random;
 use TimeFrontiers\File\FileConfig;
+use TimeFrontiers\File\Exceptions\DriverException;
 use TimeFrontiers\File\Drivers\StorageDriverInterface;
 use TimeFrontiers\File\Drivers\LocalDriver;
 use TimeFrontiers\File\Drivers\AwsS3Driver;
@@ -24,9 +25,13 @@ use TimeFrontiers\File\Drivers\DropboxDriver;
  *
  * Usage:
  *   $file = new File($conn);
- *   $file->setPath('/User-Files/12345');
  *   $file->owner    = $ownerCode;
  *   $file->nice_name = 'My Avatar';
+ *   $result = $file->upload($_FILES['avatar']);
+ *   // _path is auto-built as: /{path_prefix}/{owner}  (from base config)
+ *
+ *   // Or override the path explicitly:
+ *   $file->setPath('/Custom/Path');
  *   $result = $file->upload($_FILES['avatar']);
  */
 trait Uploader
@@ -66,18 +71,21 @@ trait Uploader
   {
     FileConfig::requireConfigured();
 
-    if (empty($this->_path)) {
-      throw new \RuntimeException(
-        'Upload path is not set. Call setPath() before upload().'
-      );
-    }
-
     if ($owner !== null) {
       $this->owner = $owner;
     }
 
     if (empty($this->_creator) || $this->_creator === 'SYSTEM') {
       $this->_creator = $creator;
+    }
+
+    // Auto-build _path from config if not explicitly set via setPath().
+    // Produces: /{path_prefix}/{owner}  e.g. /User-Files/08790777767
+    if (empty($this->_path)) {
+      $prefix = trim(FileConfig::get('path_prefix', ''), '/');
+      $ownerSeg = trim($this->owner ?? '', '/');
+      $parts  = array_filter([$prefix, $ownerSeg], fn($v) => $v !== '');
+      $this->_path = '/' . implode('/', $parts);
     }
 
     if (!$this->_attachFile($file)) {
@@ -186,10 +194,15 @@ trait Uploader
     $uniqueName  = strtolower(Random::hex(20)) . '.' . $this->_extension;
     $storagePath = rtrim($this->_path, '/') . '/' . $uniqueName;
 
-    // Dispatch to driver
+    // Dispatch to driver — catch DriverException to surface real error detail
     $driver = $this->_resolveDriver();
-    if (!$driver->upload($this->_temp_path, $storagePath)) {
-      $this->_userError('upload', 'File could not be moved to storage.');
+    try {
+      if (!$driver->upload($this->_temp_path, $storagePath)) {
+        $this->_userError('upload', 'File could not be moved to storage.');
+        return false;
+      }
+    } catch (DriverException $e) {
+      $this->_userError('upload', $e->getMessage());
       return false;
     }
 

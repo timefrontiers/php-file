@@ -64,6 +64,7 @@ final class FileConfig
   private const BASE_DEFAULTS = [
     'default_driver' => 'local',
     'db_name'        => 'file',
+    'path_prefix'    => '',          // logical path namespace, e.g. 'User-Files' — appended before /{owner}
     'service_url'    => '',
     'token_secret'   => '',
     'max_size'       => 26_214_400,  // 25 MB

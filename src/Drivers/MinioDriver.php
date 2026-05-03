@@ -87,7 +87,7 @@ class MinioDriver implements StorageDriverInterface
       ]);
       return true;
     } catch (\Throwable $e) {
-      return false;
+      throw new DriverException('MinIO upload failed: ' . $e->getMessage(), 0, $e);
     }
   }
 

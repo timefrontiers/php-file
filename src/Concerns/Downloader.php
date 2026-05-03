@@ -83,8 +83,10 @@ trait Downloader
       );
     }
 
-    $storagePath = rtrim($this->_path, '/') . '/' . $this->_name;
-    return $this->_resolveDriver($this->storage_driver ?? null)->url($storagePath);
+    // Public URL uses only _name (UNIQUE) — the internal _path folder structure
+    // is a storage-side concern and must not be exposed in public-facing URLs.
+    // e.g. https://cdn.example.com/a1b2c3d4e5f6g7h8i9j0.jpg
+    return $this->_resolveDriver($this->storage_driver ?? null)->url($this->_name);
   }
 
   // -------------------------------------------------------------------------
