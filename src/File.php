@@ -252,6 +252,33 @@ class File
   }
 
   /**
+   * Populate file metadata from an already-existing file on the local filesystem.
+   *
+   * Use this before create() to register a pre-existing file without going
+   * through upload().  Typically used after writing a generated file to disk
+   * (e.g. a letter-avatar) that needs to be persisted in the file catalogue.
+   *
+   * @param string $absolutePath  Full absolute path to the file on disk.
+   * @param string $storagePath   Relative storage path (stored in _path),
+   *                              e.g. '/Client-Files/21239176614'
+   * @throws \RuntimeException    If the file does not exist on disk.
+   */
+  public function fromDisk(string $absolutePath, string $storagePath): static
+  {
+    if (!\file_exists($absolutePath)) {
+      throw new \RuntimeException("File not found on disk: [{$absolutePath}]");
+    }
+
+    $this->_name       = \basename($absolutePath);
+    $this->_path       = '/' . \ltrim($storagePath, '/');
+    $this->_type       = \mime_content_type($absolutePath) ?: 'application/octet-stream';
+    $this->_size       = (int)\filesize($absolutePath);
+    $this->type_group  = static::groupForMime($this->_type) ?? 'image';
+
+    return $this;
+  }
+
+  /**
    * Find by the 15-char code (human-facing identifier).
    *
    * @return static|false
