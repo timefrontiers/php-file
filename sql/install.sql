@@ -106,6 +106,7 @@ CREATE TABLE `folders` (
   `_author`   VARCHAR(128)    NOT NULL,
   `_created`  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP(),
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_folders_owner_name` (`owner`, `name`),
   KEY `owner` (`owner`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -121,6 +122,7 @@ CREATE TABLE `folder_files` (
   `file_id`    BIGINT UNSIGNED NOT NULL,
   `_created`   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP(),
   PRIMARY KEY  (`id`),
+  UNIQUE KEY `uq_folder_file` (`folder_id`, `file_id`),
   KEY `folder_id` (`folder_id`),
   KEY `file_id`   (`file_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
