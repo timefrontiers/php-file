@@ -16,7 +16,7 @@
   "require": {
     "php": ">=8.4",
     "gumlet/php-image-resize": "^2.0",
-    "timefrontiers/php-sql-database": "^2.0",
+    "timefrontiers/php-sql-database": "^1.1",
     "timefrontiers/php-database-object": "^1.0",
     "timefrontiers/php-has-errors": "^1.0",
     "timefrontiers/php-pagination": "^1.0",
