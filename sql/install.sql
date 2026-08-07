@@ -24,7 +24,7 @@ START TRANSACTION;
 
 CREATE TABLE `file_meta` (
   `id`              BIGINT UNSIGNED   NOT NULL AUTO_INCREMENT,
-  `code`            VARCHAR(15)       NOT NULL,
+  `code`            VARCHAR(15) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `nice_name`       VARCHAR(256)      NOT NULL,
   `type_group`      CHAR(32)          DEFAULT NULL,
   `caption`         VARCHAR(255)      DEFAULT NULL,
@@ -45,7 +45,8 @@ CREATE TABLE `file_meta` (
   PRIMARY KEY (`id`),
   UNIQUE  KEY `code`  (`code`),
   UNIQUE  KEY `_name` (`_name`),
-  KEY `owner` (`owner`)
+  KEY `owner` (`owner`),
+  CONSTRAINT `chk_file_meta_public_code` CHECK (`code` REGEXP '^583[0-9]{8,12}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -57,7 +58,7 @@ CREATE TABLE `file_meta` (
 
 CREATE TABLE `file_tokens` (
   `id`              BIGINT UNSIGNED   NOT NULL AUTO_INCREMENT,
-  `code`            VARCHAR(15)       NOT NULL                  COMMENT 'TF token code (prefix 584)',
+  `code`            VARCHAR(15) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'TF token code (prefix 584)',
   `file_id`         BIGINT UNSIGNED   NOT NULL,
   `token`           CHAR(64)          NOT NULL                  COMMENT 'HMAC-SHA256 signed opaque token',
   `expires_at`      DATETIME          DEFAULT NULL              COMMENT 'NULL = never expires',
@@ -68,7 +69,8 @@ CREATE TABLE `file_tokens` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `code`  (`code`),
   UNIQUE KEY `token` (`token`),
-  KEY `file_id` (`file_id`)
+  KEY `file_id` (`file_id`),
+  CONSTRAINT `chk_file_tokens_public_code` CHECK (`code` REGEXP '^584[0-9]{8,12}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 

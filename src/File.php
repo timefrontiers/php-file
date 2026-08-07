@@ -228,15 +228,23 @@ class File
   // -------------------------------------------------------------------------
 
   /**
-   * Load an existing file record by BIGINT id or 15-char code.
+   * Load an existing file record by internal BIGINT id or public code.
    *
    * @throws \RuntimeException if not found.
    */
   public function load(int|string $identifier): static
   {
-    $file = is_int($identifier) || ctype_digit((string)$identifier)
-      ? static::findById((int)$identifier)
-      : static::findByCode((string)$identifier);
+    if (is_string($identifier)
+      && preg_match('/^' . self::CODE_PREFIX . '[0-9]{8,12}$/D', $identifier)
+    ) {
+      // Public entity codes are numeric strings, so this check must precede
+      // the backwards-compatible numeric-ID branch.
+      $file = static::findByCode($identifier);
+    } elseif (is_int($identifier) || ctype_digit((string)$identifier)) {
+      $file = static::findById((int)$identifier);
+    } else {
+      $file = static::findByCode((string)$identifier);
+    }
 
     if (!$file) {
       throw new \RuntimeException(

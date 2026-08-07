@@ -29,7 +29,7 @@ ALTER TABLE `lnk_files`.`file_meta`
 
 -- 1b. Rename id → code, widen type to VARCHAR(15)
 ALTER TABLE `lnk_files`.`file_meta`
-  CHANGE `id` `code` VARCHAR(15) NOT NULL;
+  CHANGE `id` `code` VARCHAR(15) CHARACTER SET ascii COLLATE ascii_bin NOT NULL;
 
 -- 1c. Widen _size to BIGINT UNSIGNED
 ALTER TABLE `lnk_files`.`file_meta`
@@ -75,7 +75,8 @@ ALTER TABLE `lnk_files`.`file_meta`
 -- 1j. Restore UNIQUE on _name and add index on owner
 ALTER TABLE `lnk_files`.`file_meta`
   ADD UNIQUE KEY `_name` (`_name`),
-  ADD KEY `owner` (`owner`);
+  ADD KEY `owner` (`owner`),
+  ADD CONSTRAINT `chk_file_meta_public_code` CHECK (`code` REGEXP '^583[0-9]{8,12}$');
 
 
 -- ============================================================
@@ -163,7 +164,7 @@ ALTER TABLE `lnk_files`.`folder_files` AUTO_INCREMENT = 1;
 
 CREATE TABLE IF NOT EXISTS `lnk_files`.`file_tokens` (
   `id`              BIGINT UNSIGNED   NOT NULL AUTO_INCREMENT,
-  `code`            VARCHAR(15)       NOT NULL,
+  `code`            VARCHAR(15) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `file_id`         BIGINT UNSIGNED   NOT NULL,
   `token`           CHAR(64)          NOT NULL,
   `expires_at`      DATETIME          DEFAULT NULL,
@@ -174,7 +175,8 @@ CREATE TABLE IF NOT EXISTS `lnk_files`.`file_tokens` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `code`  (`code`),
   UNIQUE KEY `token` (`token`),
-  KEY `file_id` (`file_id`)
+  KEY `file_id` (`file_id`),
+  CONSTRAINT `chk_file_tokens_public_code` CHECK (`code` REGEXP '^584[0-9]{8,12}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
