@@ -3,155 +3,104 @@ declare(strict_types=1);
 
 namespace TimeFrontiers\File\Concerns;
 
-use TimeFrontiers\File\FileConfig;
+use TimeFrontiers\File\FileConfiguration;
 
-/**
- * Thin image resize/validation seam.
- *
- * Responsibilities:
- *   - Reject uploads whose pixel dimensions fall below configured minimums.
- *   - Constrain uploaded images to configured maximum dimensions before storage.
- *
- * Only raster images supported (PNG, JPEG, GIF, BMP, WEBP).
- * SVG and other vector/non-raster types are passed through untouched.
- *
- * When timefrontiers/php-image is available this trait will delegate
- * to it; until then it uses gumlet/php-image-resize directly.
- *
- * Config keys (all optional):
- *   max_width_px   — resize down to this width  (null = no limit)
- *   max_height_px  — resize down to this height (null = no limit)
- *   min_width_px   — reject if image is narrower (null = no limit)
- *   min_height_px  — reject if image is shorter  (null = no limit)
- *
- * Requires: $this->isImage() and $this->_userError() from sibling traits.
- */
 trait ImageProcessor
 {
-  // -------------------------------------------------------------------------
-  // Validation (min dimensions — called before storage)
-  // -------------------------------------------------------------------------
-
   /**
-   * Validate pixel dimensions against configured minimums.
+   * Validate that a raster image can be decoded within configured resource limits.
    *
-   * @param string $filepath Absolute path to the temp file.
-   * @return bool  true = accept; false = rejected (error added via HasErrors)
+   * @return array{width:int,height:int,bits:int,channels:int}|null
    */
-  protected function validateImageDimensions(string $filepath): bool
+  protected function inspectImage(string $filepath, FileConfiguration $configuration): ?array
   {
     if (!$this->isImage()) {
-      return true;
+      return null;
+    }
+    $info = @getimagesize($filepath);
+    if ($info === false || $info[0] < 1 || $info[1] < 1) {
+      throw new \RuntimeException('The uploaded image could not be decoded.');
     }
 
-    [$width, $height] = $this->_readImageSize($filepath);
-
-    if ($width === 0 && $height === 0) {
-      // Can't read dimensions — don't block on technicality
-      return true;
+    $width = (int)$info[0];
+    $height = (int)$info[1];
+    $bits = max(8, (int)($info['bits'] ?? 8));
+    $channels = max(4, (int)($info['channels'] ?? 4));
+    $pixels = $width * $height;
+    if (intdiv($pixels, $height) !== $width) {
+      throw new \RuntimeException('The uploaded image dimensions overflow the supported range.');
+    }
+    if ($pixels > (int)$configuration->get('max_image_pixels')) {
+      throw new \RuntimeException('The uploaded image exceeds the configured pixel limit.');
     }
 
-    $minW = FileConfig::get('min_width_px');
-    $minH = FileConfig::get('min_height_px');
-
-    if ($minW !== null && $width < (int)$minW) {
-      $this->_userError(
-        'upload',
-        "Image width ({$width}px) is below the required minimum of {$minW}px."
-      );
-      return false;
-    }
-
-    if ($minH !== null && $height < (int)$minH) {
-      $this->_userError(
-        'upload',
-        "Image height ({$height}px) is below the required minimum of {$minH}px."
-      );
-      return false;
-    }
-
-    return true;
-  }
-
-  // -------------------------------------------------------------------------
-  // Constraint (max dimensions — called after validation, before storage)
-  // -------------------------------------------------------------------------
-
-  /**
-   * Resize image in-place if it exceeds configured maximum dimensions.
-   * Silently skips if gumlet/php-image-resize is not available.
-   *
-   * @param string $filepath Absolute path to the (temp) file to resize.
-   */
-  protected function constrainImageSize(string $filepath): void
-  {
-    if (!$this->isImage()) {
-      return;
+    // GD keeps a decoded source and a destination canvas during resize.
+    $estimatedBytes = (int)ceil($pixels * $channels * ($bits / 8) * 2.5 + (filesize($filepath) ?: 0));
+    if ($estimatedBytes > (int)$configuration->get('max_image_memory_bytes')) {
+      throw new \RuntimeException('The uploaded image exceeds the configured decoder-memory limit.');
     }
 
     if (!class_exists(\Gumlet\ImageResize::class)) {
-      // Library not installed — skip silently
+      throw new \RuntimeException('The image decoder required for upload verification is unavailable.');
+    }
+    try {
+      // Construction performs a real GD decode. Header-only getimagesize()
+      // success is not sufficient evidence that the raster is valid.
+      $probe = @new \Gumlet\ImageResize($filepath);
+      unset($probe);
+    } catch (\Throwable $exception) {
+      throw new \RuntimeException('The uploaded image could not be decoded safely.', 0, $exception);
+    }
+
+    $minWidth = $configuration->get('min_width_px');
+    $minHeight = $configuration->get('min_height_px');
+    if ($minWidth !== null && $width < (int)$minWidth) {
+      throw new \RuntimeException("The uploaded image is narrower than {$minWidth}px.");
+    }
+    if ($minHeight !== null && $height < (int)$minHeight) {
+      throw new \RuntimeException("The uploaded image is shorter than {$minHeight}px.");
+    }
+
+    return ['width' => $width, 'height' => $height, 'bits' => $bits, 'channels' => $channels];
+  }
+
+  /** Resize in place when configured maximum dimensions are exceeded. */
+  protected function constrainImageSize(string $filepath, FileConfiguration $configuration): void
+  {
+    $image = $this->inspectImage($filepath, $configuration);
+    if ($image === null) {
       return;
     }
 
-    $maxW = FileConfig::get('max_width_px');
-    $maxH = FileConfig::get('max_height_px');
-
-    if ($maxW === null && $maxH === null) {
-      return; // no constraint configured
+    $maxWidth = $configuration->get('max_width_px');
+    $maxHeight = $configuration->get('max_height_px');
+    if ($maxWidth === null && $maxHeight === null) {
+      return;
     }
-
-    [$width, $height] = $this->_readImageSize($filepath);
-
-    if ($width === 0 && $height === 0) {
-      return; // unreadable — skip
+    if (($maxWidth === null || $image['width'] <= (int)$maxWidth)
+      && ($maxHeight === null || $image['height'] <= (int)$maxHeight)
+    ) {
+      return;
     }
-
-    $exceedsW = $maxW !== null && $width  > (int)$maxW;
-    $exceedsH = $maxH !== null && $height > (int)$maxH;
-
-    if (!$exceedsW && !$exceedsH) {
-      return; // already within bounds
+    if (!class_exists(\Gumlet\ImageResize::class)) {
+      throw new \RuntimeException('The configured image constraint cannot run because the image library is unavailable.');
     }
 
     try {
-      $rz = new \Gumlet\ImageResize($filepath);
-
-      if ($maxW !== null && $maxH !== null) {
-        // Scale to fit within the bounding box, preserving aspect ratio
-        $rz->resizeToBestFit((int)$maxW, (int)$maxH);
-      } elseif ($maxW !== null) {
-        $rz->resizeToWidth((int)$maxW);
+      $resizer = new \Gumlet\ImageResize($filepath);
+      if ($maxWidth !== null && $maxHeight !== null) {
+        $resizer->resizeToBestFit((int)$maxWidth, (int)$maxHeight);
+      } elseif ($maxWidth !== null) {
+        $resizer->resizeToWidth((int)$maxWidth);
       } else {
-        $rz->resizeToHeight((int)$maxH);
+        $resizer->resizeToHeight((int)$maxHeight);
       }
-
-      $rz->save($filepath);
-    } catch (\Throwable) {
-      // Non-fatal — continue with original file if resize fails
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Private
-  // -------------------------------------------------------------------------
-
-  /**
-   * Read pixel dimensions safely.
-   *
-   * @return array{int, int}  [width, height]; [0, 0] on failure
-   */
-  private function _readImageSize(string $filepath): array
-  {
-    if (!file_exists($filepath)) {
-      return [0, 0];
+      $resizer->save($filepath);
+    } catch (\Throwable $exception) {
+      throw new \RuntimeException('The uploaded image could not be resized safely.', 0, $exception);
     }
 
-    $info = @getimagesize($filepath);
-    if ($info === false) {
-      return [0, 0];
-    }
-
-    return [(int)$info[0], (int)$info[1]];
+    // Decode the resulting image again instead of trusting the conversion.
+    $this->inspectImage($filepath, $configuration);
   }
 }

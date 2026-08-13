@@ -3,66 +3,101 @@ declare(strict_types=1);
 
 namespace TimeFrontiers\File\Concerns;
 
-/**
- * Text-file read utilities.
- *
- * Currently only implemented for local-driver files.
- */
+use TimeFrontiers\File\Exceptions\StorageException;
+
 trait Reader
 {
-  /**
-   * Return the full raw content of the file as a string.
-   * Returns false on failure.
-   */
   public function readAll(): string|false
   {
-    $path = $this->fullPath();
-
-    if (!file_exists($path) || !is_readable($path)) {
-      $this->_userError('read', 'File does not exist or is not readable.');
+    $limit = (int)$this->_configuration()->get('read_all_max_bytes', 16_777_216);
+    if ($this->size() > $limit) {
+      $this->_userError('read', 'The object exceeds the bounded readAll() limit; use openReadStream().');
       return false;
     }
-
-    return file_get_contents($path);
+    try {
+      $stream = $this->openReadStream();
+      $contents = stream_get_contents($stream, $limit + 1);
+      fclose($stream);
+      if ($contents === false || strlen($contents) > $limit) {
+        $this->_userError('read', 'The object exceeds the bounded readAll() limit.');
+        return false;
+      }
+      return $contents;
+    } catch (StorageException $exception) {
+      $this->_systemError('read', $exception->operation . ':' . $exception->driver);
+      return false;
+    }
   }
 
-  /**
-   * Return the file as an array of lines (newlines preserved).
-   *
-   * @return string[]|false
-   */
+  /** @return resource */
+  public function openReadStream(): mixed
+  {
+    if ($this->lifecycleState() !== 'active') {
+      throw new \LogicException('Only active files can be read.');
+    }
+    return $this->_resolveDriver()->readStream($this->objectKeyValue());
+  }
+
+  /** @return list<string>|false */
   public function readLines(): array|false
   {
-    $path = $this->fullPath();
-
-    if (!file_exists($path) || !is_readable($path)) {
-      $this->_userError('read', 'File does not exist or is not readable.');
+    $limit = (int)$this->_configuration()->get('read_all_max_bytes', 16_777_216);
+    try {
+      $stream = $this->openReadStream();
+      $lines = [];
+      $observed = 0;
+      while (($line = fgets($stream)) !== false) {
+        $observed += strlen($line);
+        if ($observed > $limit) {
+          fclose($stream);
+          $this->_userError('read', 'The object exceeds the bounded readLines() limit.');
+          return false;
+        }
+        $lines[] = $line;
+      }
+      fclose($stream);
+      return $lines;
+    } catch (StorageException $exception) {
+      $this->_systemError('read', $exception->operation . ':' . $exception->driver);
       return false;
     }
-
-    return file($path);
   }
 
-  /**
-   * Return a single line by index (0-based).
-   * Returns null if the line does not exist.
-   */
   public function readLine(int $index): string|null|false
   {
-    $lines = $this->readLines();
-    if ($lines === false) {
+    if ($index < 0) {
+      throw new \InvalidArgumentException('Line indexes must be zero or greater.');
+    }
+    try {
+      $stream = $this->openReadStream();
+      $current = 0;
+      while (($line = fgets($stream)) !== false) {
+        if ($current++ === $index) {
+          fclose($stream);
+          return $line;
+        }
+      }
+      fclose($stream);
+      return null;
+    } catch (StorageException $exception) {
+      $this->_systemError('read', $exception->operation . ':' . $exception->driver);
       return false;
     }
-
-    return $lines[$index] ?? null;
   }
 
-  /**
-   * Return the number of lines in the file.
-   */
   public function lineCount(): int|false
   {
-    $lines = $this->readLines();
-    return $lines !== false ? count($lines) : false;
+    try {
+      $stream = $this->openReadStream();
+      $count = 0;
+      while (fgets($stream) !== false) {
+        $count++;
+      }
+      fclose($stream);
+      return $count;
+    } catch (StorageException $exception) {
+      $this->_systemError('read', $exception->operation . ':' . $exception->driver);
+      return false;
+    }
   }
 }

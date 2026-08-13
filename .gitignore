@@ -1,5 +1,7 @@
 composer.phar
 /vendor/
+/.phpunit.cache/
+/.phpstan.cache/
 
 # FUSE filesystem artifacts (Linux mount layer, never commit)
 .fuse_hidden*

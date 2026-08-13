@@ -14,17 +14,25 @@
     }
   ],
   "require": {
-    "php": ">=8.4",
+    "ext-fileinfo": "*",
+    "ext-gd": "*",
+    "php": ">=8.5",
     "gumlet/php-image-resize": "^2.0",
-    "timefrontiers/php-sql-database": "^1.1",
-    "timefrontiers/php-database-object": "^1.0",
+    "timefrontiers/php-sql-database": "^1.1.1",
+    "timefrontiers/php-database-object": "^1.1",
     "timefrontiers/php-has-errors": "^1.0",
     "timefrontiers/php-pagination": "^1.0",
     "timefrontiers/php-data": "^1.0",
-    "timefrontiers/php-validator": "^1.0"
+    "timefrontiers/php-validator": "^1.1"
   },
-  "require-dev": {},
+  "require-dev": {
+    "aws/aws-sdk-php": "^3.0",
+    "php-parallel-lint/php-parallel-lint": "^1.4",
+    "phpstan/phpstan": "^2.2",
+    "phpunit/phpunit": "^10.5"
+  },
   "suggest": {
+    "ext-zip": "Required to verify DOCX, XLSX, and PPTX container contents",
     "aws/aws-sdk-php": "Required when using the S3 or MinIO storage driver (^3.0)",
     "timefrontiers/php-image": "Advanced image manipulation — crop, watermark, rotate (coming soon)"
   },
@@ -32,6 +40,26 @@
     "psr-4": {
       "TimeFrontiers\\File\\": "src/"
     }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "TimeFrontiers\\File\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "analyse": "@php vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G",
+    "check": [
+      "@lint",
+      "@test",
+      "@analyse"
+    ],
+    "lint": "@php vendor/bin/parallel-lint src tests",
+    "test": "@php vendor/bin/phpunit --configuration=phpunit.xml.dist",
+    "test-integration": "@php vendor/bin/phpunit --configuration=phpunit.xml.dist --testsuite Integration",
+    "test-unit": "@php vendor/bin/phpunit --configuration=phpunit.xml.dist --testsuite Unit"
+  },
+  "config": {
+    "sort-packages": true
   },
   "minimum-stability": "stable",
   "prefer-stable": true

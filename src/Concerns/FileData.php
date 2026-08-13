@@ -17,6 +17,7 @@ trait FileData
   // -------------------------------------------------------------------------
 
   /** Extension → MIME type */
+  /** @var array<string, string> */
   protected static array $MIME_TYPES = [
     // text / scripts
     'txt'  => 'text/plain',
@@ -92,6 +93,7 @@ trait FileData
   ];
 
   /** MIME type → type-group label */
+  /** @var array<string, string> */
   protected static array $MIME_GROUPS = [
     'text/plain'                    => 'text',
     'text/html'                     => 'script',
@@ -151,6 +153,7 @@ trait FileData
   ];
 
   /** MIME type → preferred extension */
+  /** @var array<string, string> */
   protected static array $MIME_EXT = [
     'text/plain'                    => 'txt',
     'text/html'                     => 'html',
@@ -226,7 +229,7 @@ trait FileData
 
   public function mimeType(): string
   {
-    return $this->_type ?? 'application/octet-stream';
+    return $this->_type !== '' ? $this->_type : 'application/octet-stream';
   }
 
   public function typeGroup(): ?string

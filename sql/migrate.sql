@@ -4,6 +4,9 @@
 -- Target schema : file     (timefrontiers)
 -- Run this AFTER creating the new schema via install.sql
 -- ============================================================
+-- LEGACY IMPORT ONLY: this script creates the historical v1.0 layout.
+-- After it completes, run preflight-v1.1.0.sql and upgrade-v1.1.0.sql before
+-- deploying php-file v1.1. Do not use this as an in-place v1.0 -> v1.1 upgrade.
 -- IMPORTANT BEFORE RUNNING:
 --   1. Back up your database.
 --   2. Set @source_db below to match your old linktude database name.
@@ -166,15 +169,17 @@ CREATE TABLE IF NOT EXISTS `lnk_files`.`file_tokens` (
   `id`              BIGINT UNSIGNED   NOT NULL AUTO_INCREMENT,
   `code`            VARCHAR(15) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `file_id`         BIGINT UNSIGNED   NOT NULL,
-  `token`           CHAR(64)          NOT NULL,
+  `token_digest`    CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `token_key_id`    VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `expires_at`      DATETIME          DEFAULT NULL,
   `max_downloads`   INT UNSIGNED      DEFAULT NULL,
   `download_count`  INT UNSIGNED      NOT NULL DEFAULT 0,
+  `revoked_at`      DATETIME          DEFAULT NULL,
   `created_by`      VARCHAR(128)      NOT NULL DEFAULT 'SYSTEM',
   `_created`        DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `code`  (`code`),
-  UNIQUE KEY `token` (`token`),
+  UNIQUE KEY `uq_file_tokens_digest` (`token_key_id`, `token_digest`),
   KEY `file_id` (`file_id`),
   CONSTRAINT `chk_file_tokens_public_code` CHECK (`code` REGEXP '^584[0-9]{8,12}$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

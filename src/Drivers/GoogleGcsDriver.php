@@ -3,29 +3,21 @@ declare(strict_types=1);
 
 namespace TimeFrontiers\File\Drivers;
 
-use TimeFrontiers\File\Exceptions\DriverException;
+use TimeFrontiers\File\Exceptions\UnsupportedDriverException;
+use TimeFrontiers\File\Storage\ObjectKey;
 
-/**
- * Google Cloud Storage driver — STUB.
- *
- * This driver is reserved for a future implementation.
- * Configure drivers['gcs'] only after this class is fully implemented.
- *
- * When implemented, configure via drivers['gcs']:
- *   'storage_url' => ''   // optional CDN override
- */
-class GoogleGcsDriver implements StorageDriverInterface
+/** @deprecated GCS is intentionally unsupported until a production driver is shipped. */
+final class GoogleGcsDriver implements StorageDriverInterface
 {
-  public function __construct()
+  public function __construct() { throw $this->unsupported('configure'); }
+  public function name(): string { return 'gcs'; }
+  public function put(string $sourcePath, ObjectKey $key, bool $overwrite = false): StorageWriteResult { throw $this->unsupported('put'); }
+  public function delete(ObjectKey $key): StorageDeleteResult { throw $this->unsupported('delete'); }
+  public function exists(ObjectKey $key): bool { throw $this->unsupported('exists'); }
+  public function readStream(ObjectKey $key): mixed { throw $this->unsupported('read'); }
+  public function move(ObjectKey $from, ObjectKey $to, bool $overwrite = false): StorageMoveResult { throw $this->unsupported('move'); }
+  private function unsupported(string $operation): UnsupportedDriverException
   {
-    throw new DriverException(
-      'Google Cloud Storage driver is not yet implemented in timefrontiers/php-file.'
-    );
+    return new UnsupportedDriverException($operation, $this->name(), 'The GCS driver is not implemented.');
   }
-
-  public function upload(string $tmpPath, string $storagePath): bool   { return false; }
-  public function delete(string $storagePath): bool                    { return false; }
-  public function exists(string $storagePath): bool                    { return false; }
-  public function url(string $storagePath): string                     { return ''; }
-  public function read(string $storagePath): mixed                     { return false; }
 }
